@@ -2,34 +2,52 @@ import "./helpers/server";
 import * as dotenv from "dotenv";
 import { ethers } from "ethers";
 import {
-	AAVE_LENDING_POOL_ABI,
-	AAVE_LENDING_POOL_ADDRESS_PROVIDER_ABI,
+	LENDING_POOL_V3_ABI,
+	LENDING_POOL_PROVIDER_V3_ABI,
+	LENDING_POOL_PROVIDER_V2_ABI,
+	LENDING_POOL_V2_ABI,
 } from "./utils/abi";
-import { AAVE_LENDING_POOL_PROVIDER_ADDRESS } from "./utils/addresses";
+import {
+	LENDING_POOL_PROVIDER_V2_MAINNET_ADDRESS,
+	LENDING_POOL_PROVIDER_V3_POLYGON_ADDRESS,
+} from "./utils/addresses";
 
 dotenv.config();
 
 // need the aave smart contracts to add the listeners to
 
 const main = async () => {
-	const provider = new ethers.providers.JsonRpcProvider(
+	const providerPolygon = new ethers.providers.JsonRpcProvider(
 		process.env.POLYGON_RPC_URL
 	);
 
-	const lendingPoolAddressProvider = new ethers.Contract(
-		AAVE_LENDING_POOL_PROVIDER_ADDRESS,
-		AAVE_LENDING_POOL_ADDRESS_PROVIDER_ABI,
-		provider
+	const providerEthereum = new ethers.providers.JsonRpcProvider(
+		process.env.ETHEREUM_RPC_URL
 	);
 
-	const lendingPoolAddress = await lendingPoolAddressProvider.getPool();
-	console.log(lendingPoolAddress);
+	const lendingPoolAddressProviderPolygon = new ethers.Contract(
+		LENDING_POOL_PROVIDER_V3_POLYGON_ADDRESS,
+		LENDING_POOL_PROVIDER_V3_ABI,
+		providerPolygon
+	);
 
-	if (lendingPoolAddress) {
+	const lendingPoolAddressProviderEthereum = new ethers.Contract(
+		LENDING_POOL_PROVIDER_V2_MAINNET_ADDRESS,
+		LENDING_POOL_PROVIDER_V2_ABI,
+		providerEthereum
+	);
+
+	const lendingPoolAddressPolygon =
+		await lendingPoolAddressProviderPolygon.getPool();
+
+	const lendingPoolAddressEthereum =
+		await lendingPoolAddressProviderEthereum.getLendingPool();
+
+	if (lendingPoolAddressPolygon) {
 		const lendingPool = new ethers.Contract(
-			lendingPoolAddress,
-			AAVE_LENDING_POOL_ABI,
-			provider
+			lendingPoolAddressPolygon,
+			LENDING_POOL_V3_ABI,
+			providerPolygon
 		);
 		lendingPool.on(
 			"LiquidationCall",
@@ -44,7 +62,7 @@ const main = async () => {
 				_receiveAToken,
 				_timestamp
 			) => {
-				console.log("LiquidationCall");
+				console.log("LiquidationCallV3Polygon");
 				console.log(`_collateral: ${_collateral}`);
 				console.log(`_reserve: ${_reserve}`);
 				console.log(`_user: ${_user}`);
@@ -56,7 +74,57 @@ const main = async () => {
 				console.log(`_timestamp: ${_timestamp}`);
 			}
 		);
+		lendingPool.on("Borrow", () => {
+			console.log("BorrowV3Polygon");
+		});
+		lendingPool.on("Supply", () => {
+			console.log("SupplyV3Polygon");
+		});
 	}
+
+	if (lendingPoolAddressEthereum) {
+		const lendingPool = await new ethers.Contract(
+			lendingPoolAddressEthereum,
+			LENDING_POOL_V2_ABI,
+			providerEthereum
+		);
+		lendingPool.on("Borrow", () => {
+			console.log("BorrowV2Ethereum");
+		});
+		lendingPool.on(
+			"LiquidationCall",
+			(
+				_collateral,
+				_reserve,
+				_user,
+				_purchasedAmount,
+				_liquidatedCollateralAmount,
+				_accruedBorrowInterest,
+				_liquidator,
+				_receiveAToken,
+				_timestamp
+			) => {
+				console.log("LiquidationCallV2Ethereum");
+				console.log(`_collateral: ${_collateral}`);
+				console.log(`_reserve: ${_reserve}`);
+				console.log(`_user: ${_user}`);
+				console.log(`_purchasedAmount: ${_purchasedAmount}`);
+				console.log(`_liquidatedCollateralAmount: ${_liquidatedCollateralAmount}`);
+				console.log(`_accruedBorrowInterest: ${_accruedBorrowInterest}`);
+				console.log(`_liquidator: ${_liquidator}`);
+				console.log(`_receiveAToken: ${_receiveAToken}`);
+				console.log(`_timestamp: ${_timestamp}`);
+			}
+		);
+		lendingPool.on("Deposit", () => {
+			console.log("DepositV2Ethereum");
+		});
+		lendingPool.on("Withdraw", () => {
+			console.log("WithdrawV2Ethereum");
+		});
+	}
+
+	// add other listeners here
 };
 
 main();
