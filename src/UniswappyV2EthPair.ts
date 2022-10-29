@@ -150,6 +150,9 @@ export class UniswappyV2EthPair extends EthMarket {
 		// have all the different pairs and need continuos data for every block
 		await UniswappyV2EthPair.updateReserves(provider, allMarketPairs);
 
+		// taking each pair and getting the balance of WETH token and making sure the balance is greater than 1 ETHER
+		// this removes any pairs that have less than the ETHER amount in WETH
+		// look into the groupBy function as to what it is doing with the pair itself
 		const marketsByToken = _.chain(allMarketPairs)
 			.filter((pair) => pair.getBalance(WETH_ADDRESS).gt(ETHER))
 			.groupBy((pair) =>
