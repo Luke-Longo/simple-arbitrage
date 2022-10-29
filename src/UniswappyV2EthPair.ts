@@ -58,13 +58,18 @@ export class UniswappyV2EthPair extends EthMarket {
 		provider: providers.JsonRpcProvider,
 		factoryAddress: string
 	): Promise<Array<UniswappyV2EthPair>> {
+		// define the uniswap query contract
 		const uniswapQuery = new Contract(
 			UNISWAP_LOOKUP_CONTRACT_ADDRESS,
 			UNISWAP_QUERY_ABI,
 			provider
 		);
 
+		// get the an
+
 		const marketPairs = new Array<UniswappyV2EthPair>();
+		// using uniswap batch size because this is the size of the batches we are going to be querying, multiply that by each iteration of the loop to get the total number of markets we are querying.
+		// ie if we want to query 1000 markets we will have the limit set to 1
 		for (
 			let i = 0;
 			i < BATCH_COUNT_LIMIT * UNISWAP_BATCH_SIZE;
@@ -77,19 +82,26 @@ export class UniswappyV2EthPair extends EthMarket {
 					i + UNISWAP_BATCH_SIZE
 				)
 			)[0];
+			// now we are decomposing the pairs array,
 			for (let i = 0; i < pairs.length; i++) {
 				const pair = pairs[i];
+				// this is the pair contract address
 				const marketAddress = pair[2];
 				let tokenAddress: string;
 
+				// checks if the token is WETH and if so sets it to the tokenAddress
+				// using weth as we are paying costs in weth and do not need to calculate a weth to arb token price
 				if (pair[0] === WETH_ADDRESS) {
 					tokenAddress = pair[1];
 				} else if (pair[1] === WETH_ADDRESS) {
 					tokenAddress = pair[0];
 				} else {
+					// if the token is not WETH then we skip it and restart the loop
 					continue;
 				}
+				// check if the token is not blacklisted
 				if (!blacklistTokens.includes(tokenAddress)) {
+					// if it is not then create a new market pair and push it to the marketPairs array
 					const uniswappyV2EthPair = new UniswappyV2EthPair(
 						marketAddress,
 						[pair[0], pair[1]],
@@ -98,14 +110,14 @@ export class UniswappyV2EthPair extends EthMarket {
 					marketPairs.push(uniswappyV2EthPair);
 				}
 			}
+			// this is here to cutoff the end of the loop if we have have reached the end of available pairs
 			if (pairs.length < UNISWAP_BATCH_SIZE) {
 				break;
 			}
 		}
-
+		// return the market pairs array containing a new UniswappyV2EthPair, which is an object with marketAddress, tokens and protocol
 		return marketPairs;
 	}
-
 	static async getUniswapMarketsByToken(
 		provider: providers.JsonRpcProvider,
 		factoryAddresses: Array<string>
@@ -116,6 +128,10 @@ export class UniswappyV2EthPair extends EthMarket {
 				UniswappyV2EthPair.getUniswappyMarkets(provider, factoryAddress)
 			)
 		);
+
+		// using lodash to convert data types in a flow without iterating over values and iterating over an array
+		// simple way to group things
+		// doing this to find the position of weth inside the pairs array and grouping them by weth position
 
 		const marketsByTokenAll = _.chain(allPairs)
 			.flatten()
@@ -131,6 +147,7 @@ export class UniswappyV2EthPair extends EthMarket {
 			.flatten()
 			.value();
 
+		// have all the different pairs and need continuos data for every block
 		await UniswappyV2EthPair.updateReserves(provider, allMarketPairs);
 
 		const marketsByToken = _.chain(allMarketPairs)
@@ -150,18 +167,26 @@ export class UniswappyV2EthPair extends EthMarket {
 		provider: providers.JsonRpcProvider,
 		allMarketPairs: Array<UniswappyV2EthPair>
 	): Promise<void> {
+		// uniswap query contract
 		const uniswapQuery = new Contract(
 			UNISWAP_LOOKUP_CONTRACT_ADDRESS,
 			UNISWAP_QUERY_ABI,
 			provider
 		);
+
+		// make a simple object with all the addresses of pair addresses
 		const pairAddresses = allMarketPairs.map(
 			(marketPair) => marketPair.marketAddress
 		);
+
+		// print the amount of addresses we are looking at
 		console.log("Updating markets, count:", pairAddresses.length);
+
+		// calls the get reserves by pairs on the uniswap query contract, this will return the reserve0, reserve1, blocktimestamp
 		const reserves: Array<Array<BigNumber>> = (
 			await uniswapQuery.functions.getReservesByPairs(pairAddresses)
 		)[0];
+
 		for (let i = 0; i < allMarketPairs.length; i++) {
 			const marketPair = allMarketPairs[i];
 			const reserve = reserves[i];
