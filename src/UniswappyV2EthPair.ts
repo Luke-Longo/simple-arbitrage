@@ -118,6 +118,7 @@ export class UniswappyV2EthPair extends EthMarket {
 		// return the market pairs array containing a new UniswappyV2EthPair, which is an object with marketAddress, tokens and protocol
 		return marketPairs;
 	}
+
 	static async getUniswapMarketsByToken(
 		provider: providers.JsonRpcProvider,
 		factoryAddresses: Array<string>
@@ -153,6 +154,9 @@ export class UniswappyV2EthPair extends EthMarket {
 		// taking each pair and getting the balance of WETH token and making sure the balance is greater than 1 ETHER
 		// this removes any pairs that have less than the ETHER amount in WETH
 		// look into the groupBy function as to what it is doing with the pair itself
+		// this function filters out all pairs that do not have one side as WETH and will check if the token in position is WETH, if it is WETH then it will return the other token address and use that to set the market pair key.
+		// the marketByToken will result in an object with the token address mapped to the array of eth markets
+		// example is you will have an array of weth markets mapped to the usdc token address.
 		const marketsByToken = _.chain(allMarketPairs)
 			.filter((pair) => pair.getBalance(WETH_ADDRESS).gt(ETHER))
 			.groupBy((pair) =>

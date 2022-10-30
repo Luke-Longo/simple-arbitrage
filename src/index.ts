@@ -62,20 +62,23 @@ async function main() {
 		"Flashbots Relay Signing Wallet Address: " +
 			(await flashbotsRelaySigningWallet.getAddress())
 	);
+
 	const flashbotsProvider = await FlashbotsBundleProvider.create(
 		provider,
 		flashbotsRelaySigningWallet
 	);
+
 	const arbitrage = new Arbitrage(
 		arbitrageSigningWallet,
 		flashbotsProvider,
 		new Contract(BUNDLE_EXECUTOR_ADDRESS, BUNDLE_EXECUTOR_ABI, provider)
 	);
-
+	// markets is the returned array of the result of th query containing the token0, token1, and the pari contract address
 	const markets = await UniswappyV2EthPair.getUniswapMarketsByToken(
 		provider,
 		FACTORY_ADDRESSES
 	);
+
 	provider.on("block", async (blockNumber) => {
 		await UniswappyV2EthPair.updateReserves(provider, markets.allMarketPairs);
 		const bestCrossedMarkets = await arbitrage.evaluateMarkets(
