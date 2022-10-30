@@ -303,17 +303,21 @@ export class Arbitrage {
 				"get this much profit",
 				bestCrossedMarket.profit.toString()
 			);
+
+			// buy calls generates byte code data, payloads carry info for what to do with the data
 			const buyCalls =
 				await bestCrossedMarket.buyFromMarket.sellTokensToNextMarket(
 					WETH_ADDRESS,
 					bestCrossedMarket.volume,
 					bestCrossedMarket.sellToMarket
 				);
+
 			const inter = bestCrossedMarket.buyFromMarket.getTokensOut(
 				WETH_ADDRESS,
 				bestCrossedMarket.tokenAddress,
 				bestCrossedMarket.volume
 			);
+
 			const sellCallData = await bestCrossedMarket.sellToMarket.sellTokens(
 				bestCrossedMarket.tokenAddress,
 				inter,
@@ -324,11 +328,14 @@ export class Arbitrage {
 				...buyCalls.targets,
 				bestCrossedMarket.sellToMarket.marketAddress,
 			];
+
 			const payloads: Array<string> = [...buyCalls.data, sellCallData];
 			console.log({ targets, payloads });
 			const minerReward = bestCrossedMarket.profit
 				.mul(minerRewardPercentage)
 				.div(100);
+
+			// construct the transaction
 			const transaction =
 				await this.bundleExecutorContract.populateTransaction.uniswapWeth(
 					bestCrossedMarket.volume,
@@ -340,7 +347,7 @@ export class Arbitrage {
 						gasLimit: BigNumber.from(1000000),
 					}
 				);
-
+			// simulating a transaction if it fails to estimate gas then it will throw an error
 			try {
 				const estimateGas = await this.bundleExecutorContract.provider.estimateGas({
 					...transaction,
@@ -359,27 +366,36 @@ export class Arbitrage {
 				);
 				continue;
 			}
+
+			// create a flashbots bundle array, could add multiple transactions to the bundle array, all the transactions in a bundle need to be executed in the order they are presented in the array.
+			// you could snipe a signed transaction from the mempool and add it to the bundle array
+			// ie you could input the oracle update signed transaction into the bundle array and then liquidate a loan as you are the very next
 			const bundledTransactions = [
 				{
 					signer: this.executorWallet,
 					transaction: transaction,
 				},
 			];
+
 			console.log(bundledTransactions);
+			// flashbots also takes signed bundles with a privateKey
 			const signedBundle = await this.flashbotsProvider.signBundle(
 				bundledTransactions
 			);
-			//
+
+			// simulates the bundle to make sure there are no errors
 			const simulation = await this.flashbotsProvider.simulate(
 				signedBundle,
 				blockNumber + 1
 			);
+
 			if ("error" in simulation || simulation.firstRevert !== undefined) {
 				console.log(
 					`Simulation Error on token ${bestCrossedMarket.tokenAddress}, skipping`
 				);
 				continue;
 			}
+
 			console.log(
 				`Submitting bundle, profit sent to miner: ${bigNumberToDecimal(
 					simulation.coinbaseDiff
@@ -388,6 +404,8 @@ export class Arbitrage {
 					9
 				)} GWEI`
 			);
+
+			// submits the bundle to flashbots for this block and the next block
 			const bundlePromises = _.map(
 				[blockNumber + 1, blockNumber + 2],
 				(targetBlockNumber) =>
