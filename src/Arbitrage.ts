@@ -28,6 +28,61 @@ const TEST_VOLUMES = [
 	ETHER.mul(10),
 ];
 
+const MY_TEST_VOLUMES = [
+	ETHER.div(100),
+	ETHER.div(10),
+	ETHER.div(6),
+	ETHER.div(4),
+	ETHER.div(2),
+	ETHER.div(1),
+	ETHER.mul(2),
+	ETHER.mul(5),
+	ETHER.mul(10),
+];
+
+// const binarySearchMarkets = (
+// 	upper: BigNumber,
+// 	lower: BigNumber,
+// 	tokenAddress: string,
+// 	buyFromMarket: EthMarket,
+// 	sellToMarket: EthMarket
+// ) => {
+// 	const mid = upper.add(lower).div(2);
+
+// 	// this is the same as the previous loop but with the trySize instead of the size
+// 	const tryTokensOutFromBuyingSize = buyFromMarket.getTokensOut(
+// 		WETH_ADDRESS,
+// 		tokenAddress,
+// 		mid
+// 	);
+
+// 	const tryProceedsFromSellingTokens = sellToMarket.getTokensOut(
+// 		tokenAddress,
+// 		WETH_ADDRESS,
+// 		tryTokensOutFromBuyingSize
+// 	);
+
+// 	const profit = tryProceedsFromSellingTokens.sub(mid);
+
+// 	// if (profit.gt(0)) {
+// 	// 	return binarySearchMarkets(
+// 	// 		upper,
+// 	// 		mid,
+// 	// 		tokenAddress,
+// 	// 		buyFromMarket,
+// 	// 		sellToMarket
+// 	// 	);
+// 	// } else {
+// 	// 	return binarySearchMarkets(
+// 	// 		mid,
+// 	// 		lower,
+// 	// 		tokenAddress,
+// 	// 		buyFromMarket,
+// 	// 		sellToMarket
+// 	// 	);
+// 	// }
+// };
+
 export function getBestCrossedMarket(
 	crossedMarkets: Array<EthMarket>[],
 	tokenAddress: string
@@ -56,21 +111,42 @@ export function getBestCrossedMarket(
 
 			const profit = proceedsFromSellingTokens.sub(size);
 			// this does not come to play on the first iteration of the loop that is why it is initially set to undefined, however after the first iteration it will come into play
+			// basically the loop will iterate until it fulfills the condition where the profit is no longer increasing
 			// check if the profit is less than the bestCrossedMarket.profit
 			if (bestCrossedMarket !== undefined && profit.lt(bestCrossedMarket.profit)) {
 				// If the next size up lost value, meet halfway. TODO: replace with real binary search
+				// the reason it is not real binary search because you are not searching over all range of values instead you take the average of the two values and then check if the profit is greater than the average
+				// you technically know that the profit will be less using the current size as it entered the loop, so you would theoretically be searching for a value between the currentSize and the previous best size.
+				// you would want to take the average of the two, then check if the average is less or greater. If less than you would want to repeat until you find a value that is greater than the average.
+				// if greater than you will want to use the upper bound of the previous to use and take the average of the two and check if the profit using the average is less or greater than the initial average.
+
+				// the trySize is the average of the current size and the previous best size
+
+				// const { profit: tryProfit, mid } = binarySearchMarkets(
+				// 	size,
+				// 	bestCrossedMarket.volume,
+				// 	tokenAddress,
+				// 	buyFromMarket,
+				// 	sellToMarket
+				// );
+
 				const trySize = size.add(bestCrossedMarket.volume).div(2);
+
+				// this is the same as the previous loop but with the trySize instead of the size
 				const tryTokensOutFromBuyingSize = buyFromMarket.getTokensOut(
 					WETH_ADDRESS,
 					tokenAddress,
 					trySize
 				);
+
 				const tryProceedsFromSellingTokens = sellToMarket.getTokensOut(
 					tokenAddress,
 					WETH_ADDRESS,
 					tryTokensOutFromBuyingSize
 				);
+
 				const tryProfit = tryProceedsFromSellingTokens.sub(trySize);
+
 				if (tryProfit.gt(bestCrossedMarket.profit)) {
 					bestCrossedMarket = {
 						volume: trySize,
@@ -80,6 +156,34 @@ export function getBestCrossedMarket(
 						buyFromMarket,
 					};
 				}
+				// could just use else but this is more explicit
+				// } else if (tryProfit.lt(bestCrossedMarket.profit)) {
+				// 	const newTrySize = trySize.add(bestCrossedMarket.volume).div(2);
+				// 	// this is the same as the previous loop but with the trySize instead of the size
+				// 	const tryTokensOutFromBuyingSize = buyFromMarket.getTokensOut(
+				// 		WETH_ADDRESS,
+				// 		tokenAddress,
+				// 		newTrySize
+				// 	);
+
+				// 	const tryProceedsFromSellingTokens = sellToMarket.getTokensOut(
+				// 		tokenAddress,
+				// 		WETH_ADDRESS,
+				// 		tryTokensOutFromBuyingSize
+				// 	);
+
+				// 	const newTryProfit = tryProceedsFromSellingTokens.sub(newTrySize);
+				// 	if (newTryProfit.gt(bestCrossedMarket.profit)) {
+				// 		bestCrossedMarket = {
+				// 			volume: newTrySize,
+				// 			profit: newTryProfit,
+				// 			tokenAddress,
+				// 			sellToMarket,
+				// 			buyFromMarket,
+				// 		};
+				// 	}
+				// 	break;
+				// }
 				break;
 			}
 			bestCrossedMarket = {
