@@ -85,10 +85,10 @@ async function main() {
 			markets.marketsByToken
 		);
 		if (bestCrossedMarkets.length === 0) {
-			console.log("No crossed markets");
+			console.log("No crossed markets found");
 			return;
 		}
-		bestCrossedMarkets.forEach(Arbitrage.printCrossedMarket);
+		// bestCrossedMarkets.forEach(Arbitrage.printCrossedMarket);
 		arbitrage
 			.takeCrossedMarkets(bestCrossedMarkets, blockNumber, MINER_REWARD_PERCENTAGE)
 			.then(healthcheck)
