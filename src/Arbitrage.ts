@@ -28,65 +28,13 @@ const TEST_VOLUMES = [
 	ETHER.mul(10),
 ];
 
-const MY_TEST_VOLUMES = [
-	ETHER.div(100),
-	ETHER.div(10),
-	ETHER.div(6),
-	ETHER.div(4),
-	ETHER.div(2),
-	ETHER.div(1),
-	ETHER.mul(2),
-	ETHER.mul(5),
-	ETHER.mul(10),
-];
-
-// const binarySearchMarkets = (
-// 	upper: BigNumber,
-// 	lower: BigNumber,
-// 	tokenAddress: string,
-// 	buyFromMarket: EthMarket,
-// 	sellToMarket: EthMarket
-// ) => {
-// 	const mid = upper.add(lower).div(2);
-
-// 	// this is the same as the previous loop but with the trySize instead of the size
-// 	const tryTokensOutFromBuyingSize = buyFromMarket.getTokensOut(
-// 		WETH_ADDRESS,
-// 		tokenAddress,
-// 		mid
-// 	);
-
-// 	const tryProceedsFromSellingTokens = sellToMarket.getTokensOut(
-// 		tokenAddress,
-// 		WETH_ADDRESS,
-// 		tryTokensOutFromBuyingSize
-// 	);
-
-// 	const profit = tryProceedsFromSellingTokens.sub(mid);
-
-// 	// if (profit.gt(0)) {
-// 	// 	return binarySearchMarkets(
-// 	// 		upper,
-// 	// 		mid,
-// 	// 		tokenAddress,
-// 	// 		buyFromMarket,
-// 	// 		sellToMarket
-// 	// 	);
-// 	// } else {
-// 	// 	return binarySearchMarkets(
-// 	// 		mid,
-// 	// 		lower,
-// 	// 		tokenAddress,
-// 	// 		buyFromMarket,
-// 	// 		sellToMarket
-// 	// 	);
-// 	// }
-// };
+const BOUNDS = [ETHER.div(100), ETHER.mul(10)];
 
 export function getBestCrossedMarket(
 	crossedMarkets: Array<EthMarket>[],
 	tokenAddress: string
 ): CrossedMarketDetails | undefined {
+	// initialize bestCrossedMarket
 	let bestCrossedMarket: CrossedMarketDetails | undefined = undefined;
 
 	for (const crossedMarket of crossedMarkets) {
@@ -95,6 +43,101 @@ export function getBestCrossedMarket(
 		// buyFromMarket will be buying WETH from market 1 with the arbitrary token
 		const buyFromMarket = crossedMarket[1];
 		// test volumes i am guessing is the volume of the token that is being sold/bought, attempting to factor in fees and slippage
+
+		const binarySearchProfit = (
+			lowerBound: BigNumber,
+			upperBound: BigNumber
+		): BigNumber => {
+			const midPoint = lowerBound.add(upperBound).div(2);
+
+			const tokensOutFromBuyingSize = buyFromMarket.getTokensOut(
+				WETH_ADDRESS,
+				tokenAddress,
+				midPoint
+			);
+			// use the amountsOut from the buyingSize as the amountIn on the selling market to get the amount of WETH that will be received
+			const proceedsFromSellingTokens = sellToMarket.getTokensOut(
+				tokenAddress,
+				WETH_ADDRESS,
+				tokensOutFromBuyingSize
+			);
+
+			const profit = proceedsFromSellingTokens.sub(midPoint);
+
+			if (profit.gt(0)) {
+				if (upperBound.sub(lowerBound).lt(ETHER.div(100))) {
+					console.log("profit", profit.toString());
+					console.log("midPoint", midPoint.toString());
+					return profit;
+				} else {
+					return binarySearchProfit(midPoint, upperBound);
+				}
+			} else {
+				return binarySearchProfit(lowerBound, midPoint);
+			}
+		};
+
+		// calling this function will recursively look for the best profit until reaching within .1% of the optimal profit
+		// const binarySearchMarkets = (
+		// 	upper: BigNumber,
+		// 	lower: BigNumber,
+		// 	tokenAddress: string,
+		// 	buyFromMarket: EthMarket,
+		// 	sellToMarket: EthMarket,
+		// 	initialProfit: BigNumber
+		// ) => {
+		// 	const mid = upper.add(lower).div(2);
+
+		// 	const tryTokensOutFromBuyingSize = buyFromMarket.getTokensOut(
+		// 		WETH_ADDRESS,
+		// 		tokenAddress,
+		// 		mid
+		// 	);
+
+		// 	const tryProceedsFromSellingTokens = sellToMarket.getTokensOut(
+		// 		tokenAddress,
+		// 		WETH_ADDRESS,
+		// 		tryTokensOutFromBuyingSize
+		// 	);
+
+		// 	const profit = tryProceedsFromSellingTokens.sub(mid);
+
+		// 	// get the absolute value of the percentage difference between the initial profit and the current profit
+
+		// 	const percentageDifference = initialProfit.eq(0)
+		// 		? BigNumber.from(1)
+		// 		: profit.sub(initialProfit).abs().div(initialProfit).mul(100);
+
+		// 	// if the percentage difference is less than 0.1%, then we have found the optimal volume
+		// 	if (percentageDifference.lt("1")) {
+		// 		bestCrossedMarket = {
+		// 			volume: mid,
+		// 			profit: profit,
+		// 			tokenAddress,
+		// 			sellToMarket,
+		// 			buyFromMarket,
+		// 		};
+		// 	} else if (profit.gt(initialProfit)) {
+		// 		return binarySearchMarkets(
+		// 			upper,
+		// 			mid,
+		// 			tokenAddress,
+		// 			buyFromMarket,
+		// 			sellToMarket,
+		// 			profit
+		// 		);
+		// 	} else if (profit.lt(initialProfit)) {
+		// 		return binarySearchMarkets(
+		// 			mid,
+		// 			lower,
+		// 			tokenAddress,
+		// 			buyFromMarket,
+		// 			sellToMarket,
+		// 			profit
+		// 		);
+		// 	}
+		// };
+
 		for (const size of TEST_VOLUMES) {
 			// returns the amountOut from the buying size
 			const tokensOutFromBuyingSize = buyFromMarket.getTokensOut(
@@ -110,6 +153,7 @@ export function getBestCrossedMarket(
 			);
 
 			const profit = proceedsFromSellingTokens.sub(size);
+
 			// this does not come to play on the first iteration of the loop that is why it is initially set to undefined, however after the first iteration it will come into play
 			// basically the loop will iterate until it fulfills the condition where the profit is no longer increasing
 			// check if the profit is less than the bestCrossedMarket.profit
@@ -121,14 +165,6 @@ export function getBestCrossedMarket(
 				// if greater than you will want to use the upper bound of the previous to use and take the average of the two and check if the profit using the average is less or greater than the initial average.
 
 				// the trySize is the average of the current size and the previous best size
-
-				// const { profit: tryProfit, mid } = binarySearchMarkets(
-				// 	size,
-				// 	bestCrossedMarket.volume,
-				// 	tokenAddress,
-				// 	buyFromMarket,
-				// 	sellToMarket
-				// );
 
 				const trySize = size.add(bestCrossedMarket.volume).div(2);
 
@@ -146,7 +182,6 @@ export function getBestCrossedMarket(
 				);
 
 				const tryProfit = tryProceedsFromSellingTokens.sub(trySize);
-
 				if (tryProfit.gt(bestCrossedMarket.profit)) {
 					bestCrossedMarket = {
 						volume: trySize,
@@ -156,36 +191,9 @@ export function getBestCrossedMarket(
 						buyFromMarket,
 					};
 				}
-				// could just use else but this is more explicit
-				// } else if (tryProfit.lt(bestCrossedMarket.profit)) {
-				// 	const newTrySize = trySize.add(bestCrossedMarket.volume).div(2);
-				// 	// this is the same as the previous loop but with the trySize instead of the size
-				// 	const tryTokensOutFromBuyingSize = buyFromMarket.getTokensOut(
-				// 		WETH_ADDRESS,
-				// 		tokenAddress,
-				// 		newTrySize
-				// 	);
-
-				// 	const tryProceedsFromSellingTokens = sellToMarket.getTokensOut(
-				// 		tokenAddress,
-				// 		WETH_ADDRESS,
-				// 		tryTokensOutFromBuyingSize
-				// 	);
-
-				// 	const newTryProfit = tryProceedsFromSellingTokens.sub(newTrySize);
-				// 	if (newTryProfit.gt(bestCrossedMarket.profit)) {
-				// 		bestCrossedMarket = {
-				// 			volume: newTrySize,
-				// 			profit: newTryProfit,
-				// 			tokenAddress,
-				// 			sellToMarket,
-				// 			buyFromMarket,
-				// 		};
-				// 	}
-				// 	break;
-				// }
 				break;
 			}
+			console.log("His best crossed profit : " + profit.toString());
 			bestCrossedMarket = {
 				volume: size,
 				profit: profit,
@@ -194,8 +202,9 @@ export function getBestCrossedMarket(
 				buyFromMarket,
 			};
 		}
+
+		return bestCrossedMarket;
 	}
-	return bestCrossedMarket;
 }
 
 export class Arbitrage {
@@ -228,6 +237,7 @@ export class Arbitrage {
 		);
 	}
 
+	// here is where you would look for markets to hop tokens
 	async evaluateMarkets(
 		marketsByToken: MarketsByToken
 	): Promise<Array<CrossedMarketDetails>> {

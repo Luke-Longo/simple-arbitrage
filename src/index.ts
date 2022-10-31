@@ -3,7 +3,7 @@ import { Contract, providers, Wallet } from "ethers";
 import { BUNDLE_EXECUTOR_ABI } from "./abi";
 import { UniswappyV2EthPair } from "./UniswappyV2EthPair";
 import { FACTORY_ADDRESSES } from "./addresses";
-import { Arbitrage } from "./Arbitrage";
+import { Arbitrage } from "../src/Arbitrage";
 import { get } from "https";
 import { getDefaultRelaySigningKey } from "./utils";
 import * as dotenv from "dotenv";
