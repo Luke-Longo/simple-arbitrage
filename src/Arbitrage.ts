@@ -55,7 +55,9 @@ export function getBestCrossedMarket(
 				profit: BigNumber;
 				volume: BigNumber;
 			}
+
 			let previousProfit: BigNumber = BigNumber.from(0);
+
 			const profitLogs: ProfitLog[] = [];
 
 			const binarySearchProfit = (
@@ -77,6 +79,11 @@ export function getBestCrossedMarket(
 				);
 				const profit = proceedsFromSellingTokens.sub(midPoint);
 
+				profitLogs.push({
+					profit: profit,
+					volume: midPoint,
+				});
+
 				let percentageDifference: BigNumber | undefined = undefined;
 
 				if (!previousProfit.eq(0)) {
@@ -87,35 +94,21 @@ export function getBestCrossedMarket(
 						.mul(100);
 				}
 
+				previousProfit = profit;
+
 				// create a fixed number for .1 and turn it into a big number
-				if (profit.gt(previousProfit)) {
+				if (profit.gt(0)) {
 					if (percentageDifference && percentageDifference.lt(1)) {
-						profitLogs.push({ profit, volume: midPoint });
-						previousProfit = profit;
 						return { profit, volume: midPoint };
 					} else {
-						previousProfit = profit;
 						return binarySearchProfit(midPoint, upperBound);
 					}
 				} else {
-					previousProfit = profit;
 					return binarySearchProfit(lowerBound, midPoint);
 				}
 			};
 
 			const { profit, volume } = binarySearchProfit(BOUNDS[0], BOUNDS[1]);
-
-			const logLength = profitLogs.length;
-
-			for (let i = 0; i < logLength; i++) {
-				const log = profitLogs[i];
-				console.log(
-					`Profit: ${bigNumberToDecimal(
-						log.profit,
-						18
-					)} Volume: ${bigNumberToDecimal(log.volume, 18)}`
-				);
-			}
 
 			if (profit.gt(0) && bestCrossedMarket === undefined) {
 				bestCrossedMarket = {

@@ -88,7 +88,7 @@ async function main() {
 			console.log("No crossed markets found");
 			return;
 		}
-		// bestCrossedMarkets.forEach(Arbitrage.printCrossedMarket);
+		bestCrossedMarkets.forEach(Arbitrage.printCrossedMarket);
 		arbitrage
 			.takeCrossedMarkets(bestCrossedMarkets, blockNumber, MINER_REWARD_PERCENTAGE)
 			.then(healthcheck)
