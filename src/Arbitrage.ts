@@ -47,71 +47,59 @@ export function getBestCrossedMarket(
 	// crossed markets is gonna have a length of one or 0
 	if (crossedMarkets.length !== 0) {
 		for (const crossedMarket of crossedMarkets) {
+			interface ProfitLog {
+				profit: BigNumber;
+				volume: BigNumber;
+			}
 			// sellToMarket will be selling WETH to market 0 from arbitrary token
 			const sellToMarket = crossedMarket[0];
 			// buyFromMarket will be buying WETH from market 1 with the arbitrary token
 			const buyFromMarket = crossedMarket[1];
 			// check to see if it gives the best possible profit
-			interface ProfitLog {
-				profit: BigNumber;
-				volume: BigNumber;
-			}
 
-			let previousProfit: BigNumber = BigNumber.from(0);
+			const getProfitFromVolume = (volume: BigNumber): BigNumber => {
+				const tokensOutFromBuyingSize = buyFromMarket.getTokensOut(
+					WETH_ADDRESS,
+					tokenAddress,
+					volume
+				);
+				const proceedsFromSellingTokens = sellToMarket.getTokensOut(
+					tokenAddress,
+					WETH_ADDRESS,
+					tokensOutFromBuyingSize
+				);
+				const profit = proceedsFromSellingTokens.sub(volume);
+				return profit;
+			};
 
-			const profitLogs: ProfitLog[] = [];
-
-			let counter = 0;
+			const profitLogs: ProfitLog[] = [
+				{
+					profit: BigNumber.from(0),
+					volume: BigNumber.from(0),
+				},
+			];
 
 			const binarySearchProfit = (
 				lowerBound: BigNumber,
 				upperBound: BigNumber
 			): BinarySearchResults => {
 				const midPoint = lowerBound.add(upperBound).div(2);
+				const profit = getProfitFromVolume(midPoint);
 
-				const tokensOutFromBuyingSize = buyFromMarket.getTokensOut(
-					WETH_ADDRESS,
-					tokenAddress,
-					midPoint
-				);
-				// use the amountsOut from the buyingSize as the amountIn on the selling market to get the amount of WETH that will be received
-				const proceedsFromSellingTokens = sellToMarket.getTokensOut(
-					tokenAddress,
-					WETH_ADDRESS,
-					tokensOutFromBuyingSize
-				);
-				const profit = proceedsFromSellingTokens.sub(midPoint);
+				const length = profitLogs.length;
+				const previousProfit = profitLogs[length].profit;
+				const previousVolume = profitLogs[length].volume;
 
-				let percentageDifference: BigNumber | undefined = undefined;
-
-				if (!previousProfit.eq(0)) {
-					percentageDifference = profit
-						.sub(previousProfit)
-						.abs()
-						.div(previousProfit)
-						.mul(100);
-				}
+				const slope = profit.sub(previousProfit).div(midPoint.sub(previousVolume));
+				// if the slope is negative
 
 				profitLogs.push({
 					profit,
 					volume: midPoint,
 				});
 
-				previousProfit = profit;
-
-				// counter++;
-
-				// if (counter > 20) {
-				// 	counter = 0;
-				// 	return {
-				// 		profit: profit,
-				// 		volume: midPoint,
-				// 	};
-				// }
-
-				// create a fixed number for .1 and turn it into a big number
-				if (profit.gt(0)) {
-					if (percentageDifference && percentageDifference.lt(1)) {
+				if (!slope.isNegative()) {
+					if (Number(slope.abs()) <= 0.1 || length > 20) {
 						return { profit, volume: midPoint };
 					} else {
 						return binarySearchProfit(midPoint, upperBound);
@@ -121,32 +109,54 @@ export function getBestCrossedMarket(
 				}
 			};
 
-			// for (let i = 0; i < TEST_VOLUMES.length - 1; i++) {
-			// 	const lowerBound = TEST_VOLUMES[i];
-			// 	const upperBound = TEST_VOLUMES[i + 1];
-			// 	const { profit: bestProfit, volume: bestVolume } = binarySearchProfit(
-			// 		lowerBound,
-			// 		upperBound
-			// 	);
+			const searchProfit = (
+				lowerBound: BigNumber,
+				upperBound: BigNumber
+			): BinarySearchResults => {
+				const midPoint = lowerBound.add(upperBound).div(2);
 
-			// 	profitLogs.push({
-			// 		profit: bestProfit,
-			// 		volume: bestVolume,
-			// 	});
-			// }
+				// you will want to search for the best profit and volume in both half's of the binary search
 
-			// ******* Majority of the time the binaryProfit is greatest *******
+				// if the mid point is greater than the lower bound and the mid point is greater than the upper bound
+				binarySearchProfit(midPoint, upperBound);
 
-			const { profit: binaryProfit, volume: binaryVolume } = binarySearchProfit(
-				BOUNDS[0],
-				BOUNDS[1]
-			);
+				// sort the profitLog so that the greatest profit is the 0 index
+				profitLogs.sort((a, b) => {
+					return Number(b.profit) - Number(a.profit);
+				});
 
-			// get the highest profit in the profitLogs this also includes the binaryProfit
-			const bestProfitLog = _.maxBy(profitLogs, (profitLog) => {
-				return profitLog.profit;
-			});
+				const greatestUpperProfitLog = profitLogs[0];
 
+				profitLogs.length = 0;
+
+				profitLogs.push({
+					profit: BigNumber.from(0),
+					volume: BigNumber.from(0),
+				});
+
+				binarySearchProfit(lowerBound, midPoint);
+
+				profitLogs.sort((a, b) => {
+					return Number(b.profit) - Number(a.profit);
+				});
+
+				const greatestLowerProfitLog = profitLogs[0];
+
+				profitLogs.length = 0;
+
+				profitLogs.push({
+					profit: BigNumber.from(0),
+					volume: BigNumber.from(0),
+				});
+
+				if (greatestLowerProfitLog.profit.gt(greatestUpperProfitLog.profit)) {
+					return greatestLowerProfitLog;
+				} else {
+					return greatestUpperProfitLog;
+				}
+			};
+
+			const bestProfitLog = searchProfit(BOUNDS[0], BOUNDS[1]);
 			if (bestProfitLog?.profit.gt(0) && bestCrossedMarket === undefined) {
 				bestCrossedMarket = {
 					profit: bestProfitLog.profit,
